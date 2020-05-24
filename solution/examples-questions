@@ -1,1 +1,182 @@
-sdddwd
+1. 	create openshift users: 
+create additional openshift users with the following charactistics 
+	the regular user joe with password
+	the regular user lene with password
+	you must use the existing authentication file at /etc/origin/openshift-passwd preserving its original content both users must be able to authenticate to the openshift instance via CLI and on the web console at https://master.domainall.example.com:844
+	regular users must not be able to create projects themselves.
+	
+Ans: oc login -u admin -p redhat https://master.domain7.example.com
+     htpasswd -b /etc/origin/openshift-passwd joe redhat  
+	 htpasswd -b /etc/origin/openshift-passwd lene redhat
+	 oc adm policy remove-cluster-role-from-group self-provisioner system:authenticated system:authenticated:oauth
+
+2.  create openshift enterprise projects.
+On your openshift enterprise instance create the following projects.
+	raleign
+	lobster 
+	farm
+	ditto
+	samples 
+Additionally configure projects as follows..
+
+project   user    role
+--------  -----   ------
+raleigh   joe       admin
+raleigh   lene      viewer
+lobster   lene      admin
+lobster   joe      developer
+farm      joe       developer
+farm      lene      viewer
+ditto     joe       admin
+ditto     lene      admin
+samples   joe       developer
+samples   joe       viewer 
+
+
+oc new-project raleigh --description="This is a sample"
+oc new-project lobster --description="This is a sample"
+oc new-project farm --description="This is a sample"
+oc new-project ditto --description="This is a sample"
+oc new-project samples --description="This is a sample"
+
+oc adm policy add-role-to-user admin joe -n raleigh
+oc adm policy add-role-to-user view lene -n raleigh
+oc adm policy add-role-to-user edit lene -n lobster
+oc adm policy add-role-to-user view lene -n farm
+
+
+1. Use the S2I functionality of your OpenShift instance to build an application in the raleigh project.
+	Use the Git repository at http://git.domainall.example.com/git/mordor.git for the application source
+	Use the Docker image labeled registry.domainall.example.com:5000/openshift3/ruby-20-rhel7
+	Once deployed the application must be reachable (and browse-able) at the following address: http://mordor.raleigh.cloudapps.domain7.example.com
+	Update the original repository so that the app.rb file contains the text from http://rhgls.domainall.example.com/materials/mordor.txt instead of the word PLACEHOLDER.
+	Trigger a rebuild so that when browsing http://mordor.raleigh.cloudapps.domainall.example.com it will display the new text
+	
+Ans: 
+
+   oc login -u admin -p redhat https://master.lab.example.com
+   oc project raleigh
+   oc new-app ruby-20-rhel7~http://git.domainall.example.com/git/mordor.git
+   oc get svc
+   curl http://<<SVC_URL>>
+   This will give outout PLACEHOLDER
+   git clone http://git.domainall.example.com/git/mordor.git
+   cd mordor
+   wget http://rhgls.domainall.example.com/materials/mordor.txt
+   mv mordor.txt app.rb
+   git add app.rb
+   git commit -m "Updated app.rb"
+   git push origin master
+   oc get bc
+   #Capture buid context say bc/mordor
+   oc start-build bc/mordor
+   oc get pods
+   oc get svc
+   oc expose svc --hostname=mordor.raleigh.domain7.example.com
+   
+   mozilla
+   type in http://mordor.raleigh.domain7.example.com
+   Check the updated text
+ 
+2. create an application from a third party template
+	on master.domainall.example.com using the template file in http://rhgls.domainall.example.com/materials/gogs.yaml as a basis, install an application ditto project according to the following requirements:
+	all the registry entries must point to your local registry at registry.domainall.example.com:5000
+	the version in the ImageStream line for the postgresql image must be changed from postgresql:9.5 to postgresql:9.2
+	for the Gogs pod use the Docker image from 
+	http://rhgls.domainall.example.com/ex280/gogs.tar and make sure it is tagged as registry.domainall.example.com:5000/openshiftdemos/gogs:0.9.97 and pushed to the local registry vm
+	make the template gogs available across all projects and for all users 
+	deploy the application using the template, setting the parameter HOSTNAME to gogs.ditto.cloudapps.domainall.example.com 
+                                                                                                          domain7
+	create a user joe with password and email address joe@master.domainall.example.com on the application frontend (use the register link on the top right of the page at http://gogs.ditto.cloudapps.domainall.example.com ) and, as this user, create a git repository named ex280
+	if there isn't one already, create a file named READ.md in the repo ex280, put the following line in it aut viam inveniam aut faciam and commit it.
+	the repository must be visible and accessible.
+
+   
+  Ans: 
+
+    oc login -u admin -p redhat https://master.domain7.example.com
+	oc project ditto
+	wget http://rhgls.domainall.example.com/materials/gogs.yaml
+	wget http://rhgls.domainall.example.com/ex280/gogs.tar 
+	docker load -i gogs.tar
+	docker tag docker.io/gogs registry.domain7.example.com/openshiftdemos/gogs:0.9.97
+	docker push registry.domain7.example.com/openshiftdemos/gogs:0.9.97
+	docker-registry-cli registry.domain7.example.com search gogs:0.9.97 ssl
+	docker-registry-cli registry.domain7.example.com search postgres ssl
+		vim gogs.yaml
+	#Modify postgresql:9.5 to postgresql:9.2
+	# Verify that reference to gogs docker image 
+    oc create -f gogs.yaml -n openshift
+	oc process gogs -n openshift | oc create -f -
+	oc get svc
+	oc expose svc gogssvc --hostname=gogs.ditto.cloudapps.domain7.example.com 
+	mozilla
+	type in command http://gogs.ditto.cloudapps.domain7.example.com 
+	Create a user and blog content as mentioned in question
+
+3.  Create an application using docker images and definition files
+using the example files from the wordpress directory under http://rhgls.domainall.example.com/materials/openshift/origin/example/wordpress create a wordpress application in the farm project.
+	for the wordpress pod use the Docker image from http://rhgls.domainall.example.com/ex200/wordpress.tar (Note: It is normal if the wordpress pod initially restarts a couple of times due to permission issues)
+	for the MySQL pod use the Docker image openshift3/mysql-55-rhel7. Use OCP_wordpress and OCP_mysql as pv mount point. 
+	once deployed the application must be reachable at the following address http://strangelove.farm.cloudapps.domainall.example.com 
+	finally complete the wordpress installation by setting lene as the admin user with password redhat and lene@master.domainall.example.com for the email address. 
+	set the blog name to EX280 Blog 
+	create your first post with title aut viam inveniam aut faciam. the text in the post does not matter.
+
+Ans:
+      mozilla
+      Open URL http://rhgls.domainall.example.com/materials/openshift/origin/example/wordpress in browser and verify path of pv, pvc,pod and svc defn files
+      wget http://rhgls.domain7.example.com/materials/openshift/origin/example/wordpress/nfs/pv0001.yaml
+      wget http://rhgls.domain7.example.com/materials/openshift/origin/example/wordpress/nfs/pv0002.yaml  
+	  wget http://rhgls.domain7.example.com/materials/openshift/origin/example/wordpress/pvc-wp.yaml
+	  wget http://rhgls.domain7.example.com/materials/openshift/origin/example/wordpress/nfs/pvc-mysql.yaml
+	  wget http://rhgls.domain7.example.com/materials/openshift/origin/example/wordpress/nfs/pod-wordpress.yaml
+      wget http://rhgls.domain7.example.com/materials/openshift/origin/example/wordpress/nfs/pod-mysql.yaml
+      wget http://rhgls.domain7.example.com/materials/openshift/origin/example/wordpress/nfs/service-wp.yaml
+	  wget http://rhgls.domain7.example.com/materials/openshift/origin/example/wordpress/nfs/service-mysql.yaml
+	  oc login -u admin -p redhat https://master.domain7.example.com
+	  oc project farm
+	  wget http://rhgls.domainall.example.com/ex200/wordpress.tar
+	  docker load -i wordpress.tar
+	  docker tag wordpress registry.domain7.example.com/wordpress
+	  docker push registry.lab.example.com/wordpress
+	  #mysql docker image is aready present in openshift internal registry
+	  docker-registry-cli registry.domain7.example.com search wordpress ssl
+	  docker-registry-cli registry.domain7.example.com search mysql-55-rhel7
+	  vim pv0001.yaml
+	  change below settings:
+	  server: services.domain7.example.com
+	  path: /OCP_wordpress
+	  
+	  vim pv0002
+	  server: services.lab.example.com
+	  path: /OCP_mysql
+	  
+	  vim pod-wordpress.yaml
+	  image: registry.lab.example.com/wordpress
+	  
+	  vim pod-mysql.yaml
+	  image: registry.lab.example.com/mysql-55-rhel7
+	  
+	  oc adm policy add-scc-to-user anyuid -z default
+	  
+	  oc create -f pv0001.yaml
+	  oc create -f pv0002.yaml
+	  oc create -f pvc-wp.yaml
+	  oc create -f pvc-mysql.yaml
+	  
+	  oc create -f pod-mysql.yaml
+	  oc create -f service-mysql.yaml
+
+      oc get pods
+	  #Make sure that pod of mysql is up and running
+	  #Once mysql pod is up and running create wordpress pod
+	  
+	  oc create -f pod-wordpress.yaml
+	  oc create -f service-wp.yaml
+	  
+	  Login into ocp console and create route
+	  mozilla
+	  https://master.domain7.example.com
+	  login admin/redhat
+	  goto farm project and create route mentioning hostname strangelove.farm.domain7.example.com
